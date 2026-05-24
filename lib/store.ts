@@ -21,6 +21,7 @@ export interface GamingMachine {
   latency: string;
   ipAddress: string | null;
   connectionInstructions: string | null;
+  installedGames: string[];
 }
 
 export interface TimeSlot {
@@ -85,5 +86,10 @@ export function mapMachineRow(row: Record<string, unknown>): GamingMachine {
     latency: row.latency as string,
     ipAddress: (row.ip_address as string | null) ?? null,
     connectionInstructions: (row.connection_instructions as string | null) ?? null,
+    installedGames: Array.isArray(row.machine_games)
+      ? (row.machine_games as { game_id: string }[]).map((mg) => mg.game_id)
+      : Array.isArray(row.installed_games)
+      ? (row.installed_games as string[])
+      : [],
   };
 }

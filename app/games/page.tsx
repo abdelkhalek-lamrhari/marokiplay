@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Flame, Gamepad2, Star, Trophy, Zap, ChevronRight } from "lucide-react";
 import { Navbar } from "@/components/navbar";
-import { GAMES, type GameTag } from "@/lib/games";
+import { type Game, type GameTag } from "@/lib/games";
 import { TIER_COLORS } from "@/lib/store";
 
 type FilterTag = "all" | GameTag;
@@ -21,22 +21,35 @@ const FILTERS: { value: FilterTag; label: string; icon: typeof Flame }[] = [
 
 export default function GamesPage() {
   const [filter, setFilter] = useState<FilterTag>("all");
+  const [allGames, setAllGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/games")
+      .then((r) => r.json())
+      .then((data: Game[]) => setAllGames(data))
+      .catch((err) => console.error("[games] load failed:", err))
+      .finally(() => setLoading(false));
+  }, []);
 
   const games = useMemo(() => {
-    let list = GAMES;
+    let list = allGames;
     if (filter !== "all") list = list.filter((g) => g.tags.includes(filter));
-    // Trending games come first when not filtering, sorted by rank.
     return [...list].sort((a, b) => {
       const aR = a.trendingRank ?? 999;
       const bR = b.trendingRank ?? 999;
       return aR - bR;
     });
-  }, [filter]);
+  }, [filter, allGames]);
 
-  const trendingTop = GAMES
-    .filter((g) => g.tags.includes("trending"))
-    .sort((a, b) => (a.trendingRank ?? 999) - (b.trendingRank ?? 999))
-    .slice(0, 5);
+  const trendingTop = useMemo(
+    () =>
+      allGames
+        .filter((g) => g.tags.includes("trending"))
+        .sort((a, b) => (a.trendingRank ?? 999) - (b.trendingRank ?? 999))
+        .slice(0, 5),
+    [allGames]
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -127,7 +140,9 @@ export default function GamesPage() {
 
         {/* Game grid */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-          {games.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-24 text-muted-foreground">Loading games…</div>
+          ) : games.length === 0 ? (
             <div className="text-center py-24 text-muted-foreground">No games match that filter.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">

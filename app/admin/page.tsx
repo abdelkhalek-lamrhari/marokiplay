@@ -18,6 +18,7 @@ import {
   type GamingMachine, type MachineStatus, type PerformanceTier, type Platform,
   type Reservation, type ReservationStatus
 } from "@/lib/store";
+import { type Game } from "@/lib/games";
 
 type MachineFormState = {
   id: string;
@@ -79,6 +80,8 @@ export default function AdminPage() {
   const [admins, setAdmins] = useState<AdminEntry[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [grantingAdmin, setGrantingAdmin] = useState(false);
+  const [allGames, setAllGames] = useState<Game[]>([]);
+  const [installedGameIds, setInstalledGameIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -128,6 +131,16 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadGames = useCallback(async () => {
+    try {
+      const res = await fetch("/api/games");
+      if (!res.ok) throw new Error("Failed to load games");
+      setAllGames(await res.json());
+    } catch (err) {
+      console.error("[admin] failed to load games:", err);
+    }
+  }, []);
+
   const loadAdmins = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/admins");
@@ -144,8 +157,9 @@ export default function AdminPage() {
       loadReservations();
       loadMachines();
       loadAdmins();
+      loadGames();
     }
-  }, [authState, loadReservations, loadMachines, loadAdmins]);
+  }, [authState, loadReservations, loadMachines, loadAdmins, loadGames]);
 
   const grantAdmin = async () => {
     const email = newAdminEmail.trim();
@@ -196,12 +210,14 @@ export default function AdminPage() {
   const openCreateMachine = () => {
     setEditorMode("create");
     setMachineForm(emptyMachineForm);
+    setInstalledGameIds(new Set());
     setMachineFormError("");
     setEditorOpen(true);
   };
 
   const openEditMachine = (m: GamingMachine) => {
     setEditorMode("edit");
+    setInstalledGameIds(new Set(m.installedGames));
     setMachineForm({
       id: m.id,
       name: m.name,
@@ -272,6 +288,18 @@ export default function AdminPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "Failed to save");
       }
+
+      // Persist installed-games selection.
+      const installRes = await fetch(`/api/machines/${payload.id}/games`, {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify({ gameIds: Array.from(installedGameIds) }),
+      });
+      if (!installRes.ok) {
+        const err = await installRes.json().catch(() => ({}));
+        throw new Error(err.error ?? "Saved machine but failed to update installed games");
+      }
+
       toast.success(editorMode === "create" ? "Machine created" : "Machine updated");
       setEditorOpen(false);
       await loadMachines();
@@ -1233,6 +1261,61 @@ export default function AdminPage() {
                   placeholder="Port: 3389&#10;Username: marokiplay&#10;Use Moonlight launcher with code: ABC123"
                   className="w-full bg-input border border-border rounded-sm px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-mono resize-none" />
               </Field>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground" style={{ fontFamily: "var(--font-orbitron)" }}>
+                    Installed Games
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {installedGameIds.size} / {allGames.length} selected
+                  </span>
+                </div>
+                <div className="flex gap-2 mb-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setInstalledGameIds(new Set(allGames.map((g) => g.id)))}
+                    className="px-2 py-1 border border-border text-muted-foreground hover:text-foreground rounded-sm"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInstalledGameIds(new Set())}
+                    className="px-2 py-1 border border-border text-muted-foreground hover:text-foreground rounded-sm"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto p-2 border border-border rounded-sm bg-input">
+                  {allGames.length === 0 ? (
+                    <div className="text-xs text-muted-foreground col-span-2">No games available. Run supabase/games-and-installs.sql first.</div>
+                  ) : (
+                    allGames.map((g) => {
+                      const checked = installedGameIds.has(g.id);
+                      return (
+                        <label key={g.id} className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-surface-1/40 rounded-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = new Set(installedGameIds);
+                              if (e.target.checked) next.add(g.id);
+                              else next.delete(g.id);
+                              setInstalledGameIds(next);
+                            }}
+                            className="accent-primary"
+                          />
+                          <span className="text-xs text-foreground truncate flex-1">{g.title}</span>
+                          <span className={`text-xs font-bold ${TIER_COLORS[g.recommendedTier].split(" ")[0]}`}>
+                            {g.recommendedTier[0]}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 p-5 border-t border-border/50">
               <button

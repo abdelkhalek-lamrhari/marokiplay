@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -11,7 +11,7 @@ import {
 import { Navbar } from "@/components/navbar";
 import { TIER_COLORS, type GamingMachine } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
-import { GAMES } from "@/lib/games";
+import { type Game } from "@/lib/games";
 import { Gamepad2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -38,7 +38,15 @@ export default function MachineDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const sp = useSearchParams();
   const forGameId = sp.get("for");
-  const forGame = useMemo(() => GAMES.find((g) => g.id === forGameId) ?? null, [forGameId]);
+  const [forGame, setForGame] = useState<Game | null>(null);
+
+  useEffect(() => {
+    if (!forGameId) { setForGame(null); return; }
+    fetch(`/api/games/${forGameId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g: Game | null) => setForGame(g))
+      .catch((err) => console.error("[machine-detail] game load failed:", err));
+  }, [forGameId]);
   const [machine, setMachine] = useState<GamingMachine | null>(null);
   const [loading, setLoading] = useState(true);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);

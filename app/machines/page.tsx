@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Zap, Filter, ChevronRight, Cpu, HardDrive, MemoryStick, Smartphone, Monitor, Signal, Gamepad2, X } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { TIER_COLORS, TIER_RANK, type GamingMachine, type PerformanceTier, type MachineStatus, type Platform } from "@/lib/store";
-import { GAMES } from "@/lib/games";
+import { type Game } from "@/lib/games";
 
 const TIERS: PerformanceTier[] = ["Ultra", "Elite", "Pro", "Standard"];
 const STATUSES: MachineStatus[] = ["available", "booked", "maintenance"];
@@ -28,8 +28,8 @@ export default function MachinesPageWrapper() {
 function MachinesPage() {
   const sp = useSearchParams();
   const forGameId = sp.get("for");
-  const forGame = useMemo(() => GAMES.find((g) => g.id === forGameId) ?? null, [forGameId]);
 
+  const [forGame, setForGame] = useState<Game | null>(null);
   const [machines, setMachines] = useState<GamingMachine[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTier, setSelectedTier] = useState<PerformanceTier | "all">("all");
@@ -44,12 +44,23 @@ function MachinesPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!forGameId) { setForGame(null); return; }
+    fetch(`/api/games/${forGameId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g: Game | null) => setForGame(g))
+      .catch((err) => console.error("[machines] game load failed:", err));
+  }, [forGameId]);
+
   const filtered = machines.filter((m) => {
     if (selectedTier !== "all" && m.tier !== selectedTier) return false;
     if (selectedStatus !== "all" && m.status !== selectedStatus) return false;
     if (selectedPlatform !== "all" && !m.platforms.includes(selectedPlatform)) return false;
-    // Game-first filter: rig tier must be >= game's recommended tier.
-    if (forGame && TIER_RANK[m.tier] < TIER_RANK[forGame.recommendedTier]) return false;
+    if (forGame) {
+      // Must (1) meet the tier and (2) have the game actually installed.
+      if (TIER_RANK[m.tier] < TIER_RANK[forGame.recommendedTier]) return false;
+      if (!m.installedGames.includes(forGame.id)) return false;
+    }
     return true;
   });
 
@@ -65,7 +76,7 @@ function MachinesPage() {
               <div className="flex-1 min-w-0">
                 <span className="text-xs text-muted-foreground">Booking for:</span>{" "}
                 <span className="text-sm font-bold text-foreground">{forGame.title}</span>{" "}
-                <span className="text-xs text-muted-foreground">— showing rigs that meet {forGame.recommendedTier} tier or better</span>
+                <span className="text-xs text-muted-foreground">— showing rigs with this game installed that meet {forGame.recommendedTier} tier or better</span>
               </div>
               <Link
                 href="/machines"
