@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, Lock, Trash2, Save } from "lucide-react";
+import { User, Lock, Trash2, Save, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 
-export function ProfileForm({ initialName, email }: { initialName: string; email: string }) {
+export function ProfileForm({ initialName, initialPhone, email }: { initialName: string; initialPhone: string; email: string }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
+  const [phone, setPhone] = useState(initialPhone);
   const [savingName, setSavingName] = useState(false);
+  const [savingPhone, setSavingPhone] = useState(false);
   const [pwd, setPwd] = useState({ next: "", confirm: "" });
   const [changingPwd, setChangingPwd] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -28,6 +30,24 @@ export function ProfileForm({ initialName, email }: { initialName: string; email
       return;
     }
     toast.success("Profile updated");
+    router.refresh();
+  };
+
+  const savePhone = async () => {
+    const trimmed = phone.trim();
+    if (trimmed && !/^\+?[0-9\s-]{8,20}$/.test(trimmed)) {
+      toast.error("Use international format, e.g. +212600000000");
+      return;
+    }
+    setSavingPhone(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ data: { phone_number: trimmed } });
+    setSavingPhone(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Phone updated");
     router.refresh();
   };
 
@@ -103,6 +123,34 @@ export function ProfileForm({ initialName, email }: { initialName: string; email
           style={{ fontFamily: "var(--font-orbitron)" }}
         >
           <Save className="w-3.5 h-3.5" /> {savingName ? "Saving…" : "Save"}
+        </button>
+      </div>
+
+      {/* Phone */}
+      <div className="card-gaming rounded-sm p-5">
+        <h2 className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3" style={{ fontFamily: "var(--font-orbitron)" }}>
+          Phone number
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Required to start a session — your central PC uses it to identify you when the streaming server launches.
+        </p>
+        <div className="relative mb-3">
+          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full bg-input border border-border rounded-sm pl-10 pr-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary"
+            placeholder="+212600000000"
+          />
+        </div>
+        <button
+          onClick={savePhone}
+          disabled={savingPhone || phone === initialPhone}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-xs font-bold tracking-widest uppercase rounded-sm neon-glow-cyan hover:opacity-90 transition-opacity disabled:opacity-50"
+          style={{ fontFamily: "var(--font-orbitron)" }}
+        >
+          <Save className="w-3.5 h-3.5" /> {savingPhone ? "Saving…" : "Save"}
         </button>
       </div>
 

@@ -3,14 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, User, Zap, ChevronRight } from "lucide-react";
+import { Mail, Lock, User, Zap, ChevronRight, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/navbar";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [info, setInfo] = useState("");
@@ -24,6 +24,9 @@ export default function SignupPage() {
     if (!form.name.trim()) newErrors.name = "Name is required";
     if (!form.email.trim()) newErrors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) newErrors.email = "Invalid email";
+    const phone = form.phone.trim();
+    if (!phone) newErrors.phone = "Phone number is required";
+    else if (!/^\+?[0-9\s-]{8,20}$/.test(phone)) newErrors.phone = "Use international format, e.g. +212600000000";
     if (form.password.length < 6) newErrors.password = "Password must be at least 6 characters";
     if (Object.keys(newErrors).length) {
       setErrors(newErrors);
@@ -35,7 +38,7 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({
       email: form.email.trim(),
       password: form.password,
-      options: { data: { name: form.name.trim() } },
+      options: { data: { name: form.name.trim(), phone_number: phone } },
     });
     setSubmitting(false);
 
@@ -107,6 +110,24 @@ export default function SignupPage() {
                 />
               </div>
               {errors.email && <p className="text-xs text-red-400 mt-1">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1.5" style={{ fontFamily: "var(--font-orbitron)" }}>
+                Phone
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full bg-input border border-border rounded-sm pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                  placeholder="+212600000000"
+                  autoComplete="tel"
+                />
+              </div>
+              {errors.phone && <p className="text-xs text-red-400 mt-1">{errors.phone}</p>}
             </div>
 
             <div>

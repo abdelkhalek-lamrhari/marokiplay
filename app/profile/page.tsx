@@ -14,13 +14,14 @@ export default async function ProfilePage() {
 
   const name = (user.user_metadata?.name as string) ?? "";
 
-  // Pull credit balance + recent transactions for the loyalty section.
+  // Pull credit balance + phone + recent transactions for the loyalty section.
   const { data: userRow } = await supabase
     .from("users")
-    .select("credits")
+    .select("credits, phone_number")
     .eq("id", user.id)
     .maybeSingle();
   const credits = Number(userRow?.credits ?? 0);
+  const phone = (userRow?.phone_number as string) ?? (user.user_metadata?.phone_number as string) ?? "";
 
   const { data: txRows } = await supabase
     .from("credit_transactions")
@@ -92,7 +93,7 @@ export default async function ProfilePage() {
             )}
           </div>
 
-          <ProfileForm initialName={name} email={user.email ?? ""} />
+          <ProfileForm initialName={name} initialPhone={phone} email={user.email ?? ""} />
         </div>
       </main>
     </div>

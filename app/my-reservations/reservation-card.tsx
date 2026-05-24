@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Clock, Server, X, Copy, CalendarClock, Gamepad2, Coins } from "lucide-react";
+import { Calendar, Clock, Server, X, Copy, CalendarClock, Gamepad2, Coins, KeyRound, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { STATUS_COLORS, TIER_COLORS, type PerformanceTier, type ReservationStatus } from "@/lib/store";
 
 const MAX_RESCHEDULES = 2;
+const START_LEAD_MS = 5 * 60 * 1000;
 
 type Reservation = {
   id: string;
@@ -53,6 +54,8 @@ export function ReservationCard({
   const router = useRouter();
   const [cancelling, setCancelling] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const status = reservation.status as ReservationStatus;
   const tier = reservation.machineTier as PerformanceTier;
@@ -60,6 +63,21 @@ export function ReservationCard({
   const isApproved = status === "approved";
   const reschedulesLeft = MAX_RESCHEDULES - reservation.rescheduleCount;
   const canReschedule = isActive && reschedulesLeft > 0;
+
+  // Compute session window. Tick every 30s so the "Enter PIN" button flips on at the right moment.
+  const { startMs, endMs } = useMemo(() => {
+    const startHour = parseInt(reservation.timeSlot.split(":")[0], 10);
+    const s = new Date(`${reservation.date}T${String(startHour).padStart(2, "0")}:00:00`).getTime();
+    return { startMs: s, endMs: s + reservation.duration * 60 * 60 * 1000 };
+  }, [reservation.date, reservation.timeSlot, reservation.duration]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const inWindow = now >= startMs - START_LEAD_MS && now <= endMs;
+  const canStart = isApproved && inWindow;
 
   const handleCancel = async () => {
     if (!confirm("Cancel this reservation? This cannot be undone.")) return;
@@ -112,7 +130,7 @@ export function ReservationCard({
 
       {isApproved && ipAddress && (
         <div className="mt-3 pt-3 border-t border-border/50">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Server className="w-4 h-4 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-xs text-muted-foreground tracking-widest uppercase mb-0.5" style={{ fontFamily: "var(--font-orbitron)" }}>
@@ -127,6 +145,19 @@ export function ReservationCard({
             >
               <Copy className="w-3 h-3" /> Copy
             </button>
+            {canStart ? (
+              <button
+                onClick={() => setPinModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold tracking-widest uppercase rounded-sm neon-glow-cyan hover:opacity-90 transition-opacity"
+                style={{ fontFamily: "var(--font-orbitron)" }}
+              >
+                <Play className="w-3 h-3" /> Enter PIN
+              </button>
+            ) : isApproved && now < startMs - START_LEAD_MS ? (
+              <span className="text-xs text-muted-foreground italic">
+                Starts in {formatCountdown(startMs - now)}
+              </span>
+            ) : null}
           </div>
           {connectionInstructions && (
             <div className="mt-3 p-3 rounded-sm border border-border bg-surface-1/30">
@@ -189,6 +220,113 @@ export function ReservationCard({
           }}
         />
       )}
+
+      {pinModalOpen && (
+        <PinModal
+          reservationId={reservation.id}
+          machineName={reservation.machineName}
+          onClose={() => setPinModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function formatCountdown(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function PinModal({
+  reservationId,
+  machineName,
+  onClose,
+}: {
+  reservationId: string;
+  machineName: string;
+  onClose: () => void;
+}) {
+  const [pin, setPin] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!pin.trim()) {
+      toast.error("Enter the PIN shown by your Moonlight client");
+      return;
+    }
+    setSubmitting(true);
+    const res = await fetch(`/api/reservations/${reservationId}/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: pin.trim() }),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Failed to start session");
+      return;
+    }
+    toast.success("Session starting — Moonlight should connect shortly");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm px-4 py-8">
+      <div className="card-gaming rounded-sm w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-border/50">
+          <h3 className="text-sm font-black tracking-widest" style={{ fontFamily: "var(--font-orbitron)" }}>
+            START SESSION — {machineName}
+          </h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Open Moonlight (or your streaming client), point it at the rig&apos;s IP, and copy the 4-digit pairing PIN it shows here.
+          </p>
+          <div>
+            <label className="block text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2" style={{ fontFamily: "var(--font-orbitron)" }}>
+              Pairing PIN
+            </label>
+            <div className="relative">
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="••••"
+                className="w-full bg-input border border-border rounded-sm pl-10 pr-4 py-3 text-center text-2xl font-mono tracking-widest text-foreground focus:outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 p-5 border-t border-border/50">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 border border-border text-muted-foreground text-xs font-bold tracking-widest uppercase rounded-sm hover:text-foreground transition-colors"
+            style={{ fontFamily: "var(--font-orbitron)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !pin.trim()}
+            className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground text-xs font-bold tracking-widest uppercase rounded-sm neon-glow-cyan hover:opacity-90 transition-opacity disabled:opacity-50"
+            style={{ fontFamily: "var(--font-orbitron)" }}
+          >
+            <Play className="w-3.5 h-3.5" /> {submitting ? "Starting…" : "Start session"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
