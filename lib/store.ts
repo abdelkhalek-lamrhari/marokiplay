@@ -45,6 +45,13 @@ export interface Reservation {
   cardLast4?: string;
 }
 
+export const TIER_RANK: Record<PerformanceTier, number> = {
+  Standard: 1,
+  Pro: 2,
+  Elite: 3,
+  Ultra: 4,
+};
+
 export const TIER_COLORS: Record<PerformanceTier, string> = {
   Ultra: "text-yellow-400 border-yellow-400/50 bg-yellow-400/10",
   Elite: "text-purple-400 border-purple-400/50 bg-purple-400/10",

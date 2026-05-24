@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, X, Zap, Shield, LogOut, UserCircle, ChevronDown } from "lucide-react";
+import { Menu, X, Zap, Shield, LogOut, UserCircle, ChevronDown, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -20,27 +20,28 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [credits, setCredits] = useState(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
-    const checkAdmin = async (currentUser: User | null) => {
-      if (!currentUser) { setIsAdmin(false); return; }
-      const { data } = await supabase
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", currentUser.id)
-        .maybeSingle();
-      setIsAdmin(!!data);
+    const loadUserExtras = async (currentUser: User | null) => {
+      if (!currentUser) { setIsAdmin(false); setCredits(0); return; }
+      const [adminRes, creditsRes] = await Promise.all([
+        supabase.from("admin_users").select("user_id").eq("user_id", currentUser.id).maybeSingle(),
+        supabase.from("users").select("credits").eq("id", currentUser.id).maybeSingle(),
+      ]);
+      setIsAdmin(!!adminRes.data);
+      setCredits(Number(creditsRes.data?.credits ?? 0));
     };
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
-      checkAdmin(data.user);
+      loadUserExtras(data.user);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      checkAdmin(u);
+      loadUserExtras(u);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -119,6 +120,11 @@ export function Navbar() {
 
           {user ? (
             <div className="relative">
+              {credits > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 mr-2 text-xs font-bold border border-yellow-400/30 bg-yellow-400/10 text-yellow-400 rounded-sm" title={`${credits.toFixed(2)} credits available`}>
+                  <Coins className="w-3 h-3" /> ${credits.toFixed(2)}
+                </span>
+              )}
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-2 px-3 py-2 text-xs font-bold tracking-widest uppercase border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 rounded-sm transition-colors"

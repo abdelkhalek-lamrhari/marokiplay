@@ -1,17 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Zap, Filter, ChevronRight, Cpu, HardDrive, MemoryStick, Smartphone, Monitor, Signal } from "lucide-react";
+import { Zap, Filter, ChevronRight, Cpu, HardDrive, MemoryStick, Smartphone, Monitor, Signal, Gamepad2, X } from "lucide-react";
 import { Navbar } from "@/components/navbar";
-import { TIER_COLORS, type GamingMachine, type PerformanceTier, type MachineStatus, type Platform } from "@/lib/store";
+import { TIER_COLORS, TIER_RANK, type GamingMachine, type PerformanceTier, type MachineStatus, type Platform } from "@/lib/store";
+import { GAMES } from "@/lib/games";
 
 const TIERS: PerformanceTier[] = ["Ultra", "Elite", "Pro", "Standard"];
 const STATUSES: MachineStatus[] = ["available", "booked", "maintenance"];
 const PLATFORMS: Platform[] = ["PC", "Mobile", "Both"];
 
-export default function MachinesPage() {
+export default function MachinesPageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    }>
+      <MachinesPage />
+    </Suspense>
+  );
+}
+
+function MachinesPage() {
+  const sp = useSearchParams();
+  const forGameId = sp.get("for");
+  const forGame = useMemo(() => GAMES.find((g) => g.id === forGameId) ?? null, [forGameId]);
+
   const [machines, setMachines] = useState<GamingMachine[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTier, setSelectedTier] = useState<PerformanceTier | "all">("all");
@@ -30,6 +48,8 @@ export default function MachinesPage() {
     if (selectedTier !== "all" && m.tier !== selectedTier) return false;
     if (selectedStatus !== "all" && m.status !== selectedStatus) return false;
     if (selectedPlatform !== "all" && !m.platforms.includes(selectedPlatform)) return false;
+    // Game-first filter: rig tier must be >= game's recommended tier.
+    if (forGame && TIER_RANK[m.tier] < TIER_RANK[forGame.recommendedTier]) return false;
     return true;
   });
 
@@ -38,6 +58,26 @@ export default function MachinesPage() {
       <Navbar />
 
       <main className="pt-16">
+        {forGame && (
+          <div className="border-b border-primary/30 bg-primary/5 px-4 sm:px-6 py-3">
+            <div className="max-w-7xl mx-auto flex items-center gap-3 flex-wrap">
+              <Gamepad2 className="w-4 h-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-xs text-muted-foreground">Booking for:</span>{" "}
+                <span className="text-sm font-bold text-foreground">{forGame.title}</span>{" "}
+                <span className="text-xs text-muted-foreground">— showing rigs that meet {forGame.recommendedTier} tier or better</span>
+              </div>
+              <Link
+                href="/machines"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                title="Clear game context"
+              >
+                <X className="w-3 h-3" /> Clear
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Page Header */}
         <div className="relative border-b border-border/50 py-16 px-4 sm:px-6 overflow-hidden">
           <div className="scanline absolute inset-0 opacity-20 pointer-events-none" />
@@ -258,7 +298,7 @@ export default function MachinesPage() {
                       {/* CTA */}
                       {isAvailable ? (
                         <Link
-                          href={`/machines/${machine.id}`}
+                          href={forGame ? `/machines/${machine.id}?for=${forGame.id}` : `/machines/${machine.id}`}
                           className="flex items-center justify-center gap-2 w-full py-3 bg-primary text-primary-foreground text-xs font-bold tracking-widest uppercase rounded-sm neon-glow-cyan hover:opacity-90 transition-opacity"
                           style={{ fontFamily: "var(--font-orbitron)" }}
                         >

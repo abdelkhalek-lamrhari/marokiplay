@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, use } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, use } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -11,6 +11,8 @@ import {
 import { Navbar } from "@/components/navbar";
 import { TIER_COLORS, type GamingMachine } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
+import { GAMES } from "@/lib/games";
+import { Gamepad2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { toast } from "sonner";
@@ -34,6 +36,9 @@ const formatDateHuman = (s: string) => {
 export default function MachineDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const sp = useSearchParams();
+  const forGameId = sp.get("for");
+  const forGame = useMemo(() => GAMES.find((g) => g.id === forGameId) ?? null, [forGameId]);
   const [machine, setMachine] = useState<GamingMachine | null>(null);
   const [loading, setLoading] = useState(true);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
@@ -172,6 +177,10 @@ export default function MachineDetailPage({ params }: { params: Promise<{ id: st
       userEmail: form.email,
       date: selectedDate,
     });
+    if (forGame) {
+      query.set("gameId", forGame.id);
+      query.set("gameTitle", forGame.title);
+    }
     router.push(`/checkout?${query.toString()}`);
   };
 
@@ -285,6 +294,14 @@ export default function MachineDetailPage({ params }: { params: Promise<{ id: st
                 >
                   RESERVE THIS RIG
                 </h2>
+
+                {forGame && (
+                  <div className="mb-5 px-3 py-2 rounded-sm border border-primary/30 bg-primary/5 flex items-center gap-2">
+                    <Gamepad2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="text-xs text-muted-foreground">Playing:</span>
+                    <span className="text-xs font-bold text-foreground truncate">{forGame.title}</span>
+                  </div>
+                )}
 
                 {!isAvailable ? (
                   <div className="text-center py-12">

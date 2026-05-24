@@ -39,7 +39,12 @@ export async function POST(req: NextRequest) {
     totalPrice,
     paymentMethod,
     cardLast4,
+    gameId,
+    gameTitle,
+    creditsApplied,
   } = body;
+
+  const creditsToRedeem = Math.max(0, Number(creditsApplied) || 0);
 
   // Validate required fields
   if (!machineId || !machineName || !userName || !userEmail || !date || !timeSlot || !duration || totalPrice === undefined) {
@@ -90,6 +95,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // If credits are being redeemed, user must be logged in and have enough balance.
+  if (creditsToRedeem > 0) {
+    if (!user) {
+      return NextResponse.json({ error: "Sign in to use credits" }, { status: 401 });
+    }
+    if (creditsToRedeem > Number(totalPrice)) {
+      return NextResponse.json({ error: "Credits cannot exceed booking total" }, { status: 400 });
+    }
+  }
+
   const insertPayload = {
     machine_id: machineId,
     machine_name: machineName,
@@ -104,6 +119,9 @@ export async function POST(req: NextRequest) {
     payment_method: paymentMethod ?? "card",
     card_last4: cardLast4 ?? null,
     user_id: user?.id ?? null,
+    game_id: gameId ?? null,
+    game_title: gameTitle ?? null,
+    credits_applied: creditsToRedeem,
   };
 
   // Build webhook payload (reservation ID not yet known — use a pre-resolved placeholder,
@@ -162,6 +180,22 @@ export async function POST(req: NextRequest) {
   }
 
   const data = dbResult.value.data!;
+
+  // Redeem credits atomically via the RPC. If it fails, roll back the reservation.
+  if (creditsToRedeem > 0 && user) {
+    const { error: rpcError } = await supabase.rpc("redeem_credits", {
+      p_user_id: user.id,
+      p_amount: creditsToRedeem,
+      p_reservation_id: data.id,
+    });
+    if (rpcError) {
+      await supabase.from("reservations").delete().eq("id", data.id);
+      return NextResponse.json(
+        { error: rpcError.message || "Failed to redeem credits" },
+        { status: 400 }
+      );
+    }
+  }
 
   return NextResponse.json(data, { status: 201 });
 }

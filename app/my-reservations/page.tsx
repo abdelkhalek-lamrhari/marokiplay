@@ -87,6 +87,8 @@ export default async function MyReservationsPage() {
                       totalPrice: r.total_price as number,
                       status: r.status as string,
                       rescheduleCount: (r.reschedule_count as number) ?? 0,
+                      gameTitle: (r.game_title as string | null) ?? null,
+                      creditsApplied: Number(r.credits_applied ?? 0),
                     }}
                     ipAddress={machine?.ip_address ?? null}
                     connectionInstructions={machine?.connection_instructions ?? null}

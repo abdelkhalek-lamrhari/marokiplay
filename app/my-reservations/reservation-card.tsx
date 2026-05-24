@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Clock, Server, X, Copy, CalendarClock } from "lucide-react";
+import { Calendar, Clock, Server, X, Copy, CalendarClock, Gamepad2, Coins } from "lucide-react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -21,6 +21,8 @@ type Reservation = {
   totalPrice: number;
   status: string;
   rescheduleCount: number;
+  gameTitle: string | null;
+  creditsApplied: number;
 };
 
 const todayYmd = () => new Date().toISOString().split("T")[0];
@@ -94,6 +96,12 @@ export function ReservationCard({
           <div className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
             <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {reservation.date}</span>
             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {reservation.timeSlot} · {reservation.duration}h</span>
+            {reservation.gameTitle && (
+              <span className="flex items-center gap-1 text-primary"><Gamepad2 className="w-3 h-3" /> {reservation.gameTitle}</span>
+            )}
+            {reservation.creditsApplied > 0 && (
+              <span className="flex items-center gap-1 text-yellow-400"><Coins className="w-3 h-3" /> ${Number(reservation.creditsApplied).toFixed(2)} credits used</span>
+            )}
           </div>
         </div>
         <div className="text-right">

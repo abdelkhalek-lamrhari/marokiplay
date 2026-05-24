@@ -75,7 +75,7 @@ export default function GamesPage() {
                 {trendingTop.map((g, i) => (
                   <Link
                     key={g.id}
-                    href="/machines"
+                    href={`/machines?for=${g.id}`}
                     className="relative aspect-[460/215] rounded-sm overflow-hidden border border-border/50 group hover:border-primary/50 transition-colors"
                   >
                     <Image
@@ -168,11 +168,11 @@ export default function GamesPage() {
                     <p className="text-xs text-muted-foreground mb-3">{g.category}</p>
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-4 leading-relaxed">{g.description}</p>
                     <Link
-                      href="/machines"
+                      href={`/machines?for=${g.id}`}
                       className="mt-auto inline-flex items-center justify-center gap-1.5 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-bold tracking-widest uppercase rounded-sm hover:bg-primary/20 transition-colors"
                       style={{ fontFamily: "var(--font-orbitron)" }}
                     >
-                      <Zap className="w-3 h-3" /> Reserve Rig <ChevronRight className="w-3 h-3" />
+                      <Zap className="w-3 h-3" /> Find a Rig <ChevronRight className="w-3 h-3" />
                     </Link>
                   </div>
                 </div>

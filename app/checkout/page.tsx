@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { type PerformanceTier } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
+import { Coins, Gamepad2 } from "lucide-react";
 
 function CheckoutForm() {
   const router = useRouter();
@@ -25,13 +27,35 @@ function CheckoutForm() {
   const userName = sp.get("userName") ?? "";
   const userEmail = sp.get("userEmail") ?? "";
   const reservationDate = sp.get("date") ?? new Date().toISOString().split("T")[0];
+  const gameId = sp.get("gameId") ?? "";
+  const gameTitle = sp.get("gameTitle") ?? "";
 
   const [card, setCard] = useState({ number: "", expiry: "", cvv: "", holder: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState<"form" | "processing" | "done">("form");
   const [slotTaken, setSlotTaken] = useState(false);
+  const [creditsAvailable, setCreditsAvailable] = useState(0);
+  const [creditsToApply, setCreditsToApply] = useState(0);
   const inFlight = useRef(false);
+
+  const finalPrice = Math.max(0, totalPrice - creditsToApply);
+
+  // Load the user's credit balance (no-op for guests).
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return;
+      supabase
+        .from("users")
+        .select("credits")
+        .eq("id", data.user.id)
+        .maybeSingle()
+        .then(({ data: row }) => {
+          if (row) setCreditsAvailable(Number(row.credits));
+        });
+    });
+  }, []);
 
   // Re-check on mount: if the user lingered and the slot was booked meanwhile, warn before they fill the card.
   useEffect(() => {
@@ -99,6 +123,9 @@ function CheckoutForm() {
           totalPrice,
           paymentMethod: "card",
           cardLast4: last4,
+          gameId: gameId || null,
+          gameTitle: gameTitle || null,
+          creditsApplied: creditsToApply,
         }),
       });
 
@@ -301,7 +328,7 @@ function CheckoutForm() {
                   style={{ fontFamily: "var(--font-orbitron)" }}
                 >
                   <Lock className="w-4 h-4" />
-                  {slotTaken ? "Slot Unavailable" : `Pay $${totalPrice} — Confirm Reservation`}
+                  {slotTaken ? "Slot Unavailable" : `Pay $${finalPrice.toFixed(2)} — Confirm Reservation`}
                 </button>
 
                 <div className="flex items-center justify-center gap-4 mt-4">
@@ -358,6 +385,14 @@ function CheckoutForm() {
                   </div>
                 </div>
 
+                {gameTitle && (
+                  <div className="border-t border-border pt-4 mb-3 flex items-center gap-2">
+                    <Gamepad2 className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-xs text-muted-foreground">Playing:</span>
+                    <span className="text-xs font-bold text-foreground truncate">{gameTitle}</span>
+                  </div>
+                )}
+
                 <div className="border-t border-border pt-4 space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Session rate</span>
@@ -368,14 +403,57 @@ function CheckoutForm() {
                     <span>{duration}h</span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Platform fee</span>
-                    <span>$0.00</span>
+                    <span>Subtotal</span>
+                    <span>${totalPrice.toFixed(2)}</span>
                   </div>
+
+                  {creditsAvailable > 0 && (
+                    <div className="pt-2 border-t border-border/50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-3.5 h-3.5 text-yellow-400" />
+                        <span className="text-xs text-muted-foreground">Your credits:</span>
+                        <span className="text-xs font-bold text-yellow-400">${creditsAvailable.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={Math.min(creditsAvailable, totalPrice)}
+                          step="0.10"
+                          value={creditsToApply}
+                          onChange={(e) => {
+                            const v = Math.max(0, Math.min(Number(e.target.value) || 0, creditsAvailable, totalPrice));
+                            setCreditsToApply(Math.round(v * 100) / 100);
+                          }}
+                          className="flex-1 bg-input border border-border rounded-sm px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary"
+                          placeholder="0.00"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCreditsToApply(Math.min(creditsAvailable, totalPrice))}
+                          className="px-2 py-1.5 text-xs font-bold tracking-widest uppercase border border-yellow-400/30 text-yellow-400 rounded-sm hover:bg-yellow-400/10 transition-colors"
+                          style={{ fontFamily: "var(--font-orbitron)" }}
+                        >
+                          Max
+                        </button>
+                      </div>
+                      {creditsToApply > 0 && (
+                        <div className="flex justify-between text-xs text-yellow-400">
+                          <span>Credits applied</span>
+                          <span>−${creditsToApply.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center pt-2 border-t border-border">
-                    <span className="font-bold text-sm">Total</span>
+                    <span className="font-bold text-sm">Total to charge</span>
                     <span className="text-xl font-black text-primary neon-text-cyan" style={{ fontFamily: "var(--font-orbitron)" }}>
-                      ${totalPrice}
+                      ${finalPrice.toFixed(2)}
                     </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right">
+                    You&apos;ll earn ${(totalPrice * 0.10).toFixed(2)} in credits on completion
                   </div>
                 </div>
 
